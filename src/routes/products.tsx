@@ -137,7 +137,7 @@ function ProductsPage() {
         </header>
 
         {lowItems.length > 0 && (
-          <div role="alert" className="rounded-2xl border border-inv-warn/40 bg-inv-warn-soft p-3">
+          <div role="alert" className="rounded-2xl border border-border bg-inv-warn-soft p-3">
             <div className="text-sm font-bold text-inv-warn">
               ⚠️ تنبيه: {lowItems.length} {lowItems.length === 1 ? "منتج قارب" : "منتجات قاربت"} على النفاد
             </div>
