@@ -100,10 +100,18 @@ function Console({ onOut }: { onOut: () => void }) {
                 </div>
                 <div className="flex gap-1">
                   <Badge variant={m.subscribed ? "default" : "secondary"}>{m.subscribed ? "مشترك" : "غير مشترك"}</Badge>
+                  {m.subscribed && m.subscriptionEndsAt && new Date(m.subscriptionEndsAt).getTime() <= Date.now() && (
+                    <Badge variant="destructive">منتهي</Badge>
+                  )}
                   {!m.subscribed && m.activationRequestedAt && <Badge variant="outline">طلب تفعيل · {fmt(m.activationRequestedAt)}</Badge>}
                   {m.restricted && <Badge variant="destructive">مقيّد</Badge>}
                 </div>
               </div>
+              {m.subscribed && m.subscriptionStartedAt && m.subscriptionEndsAt && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  الاشتراك: من {fmt(m.subscriptionStartedAt)} إلى {fmt(m.subscriptionEndsAt)}
+                </p>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => act(async () => { await imp({ data: { id: m.id } }); window.open("/dashboard", "_blank"); })}>
                   <LogIn className="ms-1 h-4 w-4" />دخول لحسابه
