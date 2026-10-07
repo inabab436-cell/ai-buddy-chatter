@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ChevronDown, Truck, PackageCheck, Package, Settings2, Info, XCircle,
-  Trash2, BadgeCheck, Phone, MapPin, StickyNote, Search, Download,
+  Trash2, BadgeCheck, Phone, MapPin, StickyNote, Search, Download, Pencil, Plus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
   hasPendingAddition,
   pendingItemsOf,
 } from "@/lib/order-pending-additions";
+import { NewOrderDialog, EditOrderDialog } from "@/components/orders/order-dialogs";
 
 
 export const Route = createFileRoute("/orders")({
@@ -271,6 +272,8 @@ function OrdersPage() {
   const q = useQuery({ queryKey: ["orders"], queryFn: () => listOrders() });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [newOpen, setNewOpen] = useState(false);
+  const [editing, setEditing] = useState<OrderRow | null>(null);
   const [filter, setFilter] = useState<"all" | "new" | "prepared" | "shipped" | "delivered" | "cancelled">("all");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"orders" | "messages">("orders");
@@ -376,6 +379,19 @@ function OrdersPage() {
       </div>
 
       {tab === "messages" ? <StatusMessagesEditor /> : <>
+      <NewOrderDialog open={newOpen} onOpenChange={setNewOpen} />
+      <EditOrderDialog order={editing} onClose={() => setEditing(null)} />
+      <HubCard className="flex items-center gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">أنشئ طلباتك بنفسك</div>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+            وصلك طلب بالهاتف أو واتساب أو من المحل؟ سجّله هنا في ثوانٍ ليُخصم من المخزون ويظهر مع باقي طلباتك وتتابع شحنه وتصدّره لشركة الشحن.
+          </p>
+        </div>
+        <Button size="sm" className="shrink-0 rounded-full" onClick={() => setNewOpen(true)}>
+          <Plus className="ml-1 h-4 w-4" /> طلب جديد
+        </Button>
+      </HubCard>
       {/* Search + filters */}
       <div className="space-y-3">
         <div className="relative">
@@ -475,6 +491,7 @@ function OrdersPage() {
                   onPay={() => payMut.mutate({ id: o.id })}
                   onStatus={(s) => guardedStatus(o, s)}
                   onCancel={() => cancelMut.mutate({ id: o.id })}
+                  onEdit={() => setEditing(o)}
                   busy={{ pay: payMut.isPending, status: statusMut.isPending, cancel: cancelMut.isPending }}
                 />
               </div>
@@ -514,7 +531,7 @@ function StatusRail({ status }: { status: string }) {
 }
 
 function OrderCard({
-  o, open, onToggle, onPay, onStatus, onCancel, busy,
+  o, open, onToggle, onPay, onStatus, onCancel, onEdit, busy,
 }: {
   o: OrderRow;
   open: boolean;
@@ -522,6 +539,7 @@ function OrderCard({
   onPay: () => void;
   onStatus: (s: "prepared" | "shipped" | "delivered") => void;
   onCancel: () => void;
+  onEdit: () => void;
   busy: { pay: boolean; status: boolean; cancel: boolean };
 }) {
   const pending = hasPendingAddition(o);
@@ -702,6 +720,9 @@ function OrderCard({
           onClick={onCancel}
         >
           <XCircle className="ml-1 h-3.5 w-3.5" /> ملغي
+        </Button>
+        <Button size="sm" variant="outline" className="shrink-0 rounded-full" onClick={onEdit}>
+          <Pencil className="ml-1 h-3.5 w-3.5" /> تعديل
         </Button>
       </div>
     </HubCard>
