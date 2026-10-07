@@ -129,7 +129,9 @@ async function exportOrdersToXlsx(orders: OrderRow[]) {
       address: o.customer_address ?? "",
       products: products.join("\n"),
       amount: Number.isFinite(value) ? value : 0,
-      notes: (o.notes ?? "").split("— تفاصيل الأوردر —")[0].trim(),
+      // Keep only the customer's own note: drop the auto summary block, whose
+      // heading differs between chat orders and store-page orders.
+      notes: (o.notes ?? "").split(/—\s*تفاصيل الأوردر/)[0].trim(),
     };
   });
 
@@ -400,26 +402,50 @@ function OrdersPage() {
           ))}
         </div>
         <div className="flex flex-col items-start gap-1">
-          <Button
-            size="sm"
-            className="rounded-full"
-            disabled={visible.length === 0}
-            onClick={async () => {
-              try {
-                await exportOrdersToXlsx(visible);
-                toast.success(`تم تصدير ${visible.length} ${visible.length === 1 ? "طلب" : "طلب"} بنجاح.`);
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "فشل التصدير.");
-              }
-            }}
-          >
-            <Download className="ml-1 h-4 w-4" />
-            تصدير الطلبات لشركة الشحن
-            {filter !== "all" ? ` (${visible.length})` : ""}
-          </Button>
-          <span className="px-2 text-[11px] text-muted-foreground">
-            ملف Excel جاهز — بالاسم والهاتف والعنوان والمنتجات والمبلغ المطلوب تحصيله
-          </span>
+          {(() => {
+            const chosen = visible.filter((o) => selected[o.id]);
+            const toExport = chosen.length > 0 ? chosen : visible;
+            const allChosen = visible.length > 0 && chosen.length === visible.length;
+            return (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    disabled={toExport.length === 0}
+                    onClick={async () => {
+                      try {
+                        await exportOrdersToXlsx(toExport);
+                        toast.success(`تم تصدير ${toExport.length} طلب بنجاح.`);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "فشل التصدير.");
+                      }
+                    }}
+                  >
+                    <Download className="ml-1 h-4 w-4" />
+                    {chosen.length > 0
+                      ? `تصدير المحدد (${chosen.length})`
+                      : `تصدير الطلبات لشركة الشحن${filter !== "all" ? ` (${visible.length})` : ""}`}
+                  </Button>
+                  {visible.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() =>
+                        setSelected(allChosen ? {} : Object.fromEntries(visible.map((o) => [o.id, true])))
+                      }
+                    >
+                      {allChosen ? "إلغاء التحديد" : "تحديد الكل"}
+                    </Button>
+                  )}
+                </div>
+                <span className="px-2 text-[11px] text-muted-foreground">
+                  حدّد الطلبات بالمربع بجانب كل طلب لتصديرها فقط، أو صدّر كل الطلبات المعروضة
+                </span>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -432,16 +458,26 @@ function OrdersPage() {
       ) : (
         <div className="space-y-3">
           {visible.map((o) => (
-            <OrderCard
-              key={o.id}
-              o={o}
-              open={!!expanded[o.id]}
-              onToggle={() => setExpanded((s) => ({ ...s, [o.id]: !s[o.id] }))}
-              onPay={() => payMut.mutate({ id: o.id })}
-              onStatus={(s) => guardedStatus(o, s)}
-              onCancel={() => cancelMut.mutate({ id: o.id })}
-              busy={{ pay: payMut.isPending, status: statusMut.isPending, cancel: cancelMut.isPending }}
-            />
+            <div key={o.id} className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                aria-label="تحديد الطلب للتصدير"
+                checked={!!selected[o.id]}
+                onChange={(e) => setSelected((s) => ({ ...s, [o.id]: e.target.checked }))}
+                className="mt-5 h-5 w-5 shrink-0 accent-primary"
+              />
+              <div className="min-w-0 flex-1">
+                <OrderCard
+                  o={o}
+                  open={!!expanded[o.id]}
+                  onToggle={() => setExpanded((s) => ({ ...s, [o.id]: !s[o.id] }))}
+                  onPay={() => payMut.mutate({ id: o.id })}
+                  onStatus={(s) => guardedStatus(o, s)}
+                  onCancel={() => cancelMut.mutate({ id: o.id })}
+                  busy={{ pay: payMut.isPending, status: statusMut.isPending, cancel: cancelMut.isPending }}
+                />
+              </div>
+            </div>
           ))}
         </div>
       )}
