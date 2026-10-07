@@ -270,6 +270,7 @@ function OrdersPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["orders"], queryFn: () => listOrders() });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "new" | "prepared" | "shipped" | "delivered" | "cancelled">("all");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"orders" | "messages">("orders");
