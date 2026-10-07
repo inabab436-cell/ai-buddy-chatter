@@ -4,9 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ChevronLeft, Copy, CreditCard, Crown, ExternalLink, Globe2, LogOut, Mail, Phone,
+  AlertTriangle, ChevronLeft, Copy, CreditCard, Crown, ExternalLink, Globe2, LogOut, Mail, Phone,
   Share2, ShieldCheck, Tag, Trash2, Truck, UserRound,
 } from "lucide-react";
+
+import { getActivationStatus } from "@/lib/activation.functions";
 
 import { PageShell, PageHero, SurfaceCard, SectionHeader } from "@/components/layout/page-shell";
 import { getSessionInfo, logout, deleteAccount } from "@/lib/auth.functions";
@@ -68,8 +70,16 @@ function AccountPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const fetchActivation = useServerFn(getActivationStatus);
+  const activation = useQuery({ queryKey: ["activation-status"], queryFn: () => fetchActivation() });
+
   const email = session.data?.email ?? null;
-  const subscribed = false;
+  const subscribed = activation.data?.subscribed === true;
+  const startedAt = activation.data?.startedAt ?? null;
+  const endsAt = activation.data?.endsAt ?? null;
+  const expired = subscribed && !!endsAt && new Date(endsAt).getTime() <= Date.now();
+  const fmtDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("ar-EG", { dateStyle: "medium" }) : "—";
   const storePath = site?.brand_slug ? `/c/${site.brand_slug}` : null;
   const storeUrl = storePath && typeof window !== "undefined" ? `${window.location.origin}${storePath}` : null;
 
@@ -119,13 +129,29 @@ function AccountPage() {
           <SectionHeader icon={<ShieldCheck className="h-3.5 w-3.5" />} title="بيانات الحساب" />
           <div className="divide-y divide-border">
             <Row icon={<Mail className="h-4 w-4" />} label="البريد الإلكتروني" value={email ?? "—"} mono />
-            <Row icon={<Crown className="h-4 w-4" />} label="الباقة" value="ابدأ فورًا — 299ج"
+            <Row icon={<Crown className="h-4 w-4" />} label="الباقة" value="ابدأ فورًا — 299ج شهريًا"
               action={subscribed ? undefined : (
                 <Link to="/subscribe" className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90">
                   <CreditCard className="h-3.5 w-3.5" /> دفع
                 </Link>
               )} />
+            {subscribed && (
+              <>
+                <Row icon={<ShieldCheck className="h-4 w-4" />} label="تاريخ بدء الاشتراك" value={fmtDate(startedAt)} />
+                <Row icon={<ShieldCheck className="h-4 w-4" />} label="تاريخ انتهاء الاشتراك" value={fmtDate(endsAt)} />
+              </>
+            )}
           </div>
+          {subscribed && (
+            <div className={`flex items-start gap-2.5 border-t border-border px-4 py-3 ${expired ? "bg-dashboard-amber-soft" : ""}`}>
+              <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${expired ? "text-dashboard-amber" : "text-muted-foreground"}`} />
+              <p className={`text-xs leading-relaxed ${expired ? "font-bold text-dashboard-amber" : "text-muted-foreground"}`}>
+                {expired
+                  ? "انتهت مدة اشتراكك. سيتم تقييد متجرك لحين تجديد الاشتراك."
+                  : "سيتم تقييد متجرك عند انتهاء مدة الاشتراك لحين التجديد."}
+              </p>
+            </div>
+          )}
         </SurfaceCard>
 
         <SurfaceCard>
