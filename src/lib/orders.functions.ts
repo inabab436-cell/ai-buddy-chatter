@@ -379,3 +379,171 @@ export const cancelOrder = createServerFn({ method: "POST" })
     if ((res as any)?.ok === false) throw new Error("الطلب غير موجود.");
     return { ok: true };
   });
+
+// ---------- MERCHANT-CREATED ORDERS --------------------------------------
+export interface OrderCatalogProduct {
+  id: string;
+  name: string;
+  price: number | null;
+  currency: string | null;
+  variants: { color: string | null; size: string | null; stock: number | null }[];
+}
+
+/** Products + variants the merchant can pick from when creating an order. */
+export const listOrderCatalog = createServerFn({ method: "GET" }).handler(
+  async (): Promise<OrderCatalogProduct[]> => {
+    const { requirePermission } = await import("@/lib/session-guard.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { userId } = await requirePermission("orders");
+    const admin = getSupabaseAdmin();
+    const { data: prods, error } = await admin
+      .from("products")
+      .select("id, name, price, currency")
+      .eq("user_id", userId)
+      .order("name");
+    if (error) throw new Error(error.message);
+    const ids = (prods ?? []).map((p: any) => p.id);
+    const { data: vars } = ids.length
+      ? await admin.from("product_variants").select("product_id, color, size, stock").in("product_id", ids)
+      : { data: [] as any[] };
+    return (prods ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price ?? null,
+      currency: p.currency ?? null,
+      variants: (vars ?? [])
+        .filter((v: any) => v.product_id === p.id)
+        .map((v: any) => ({ color: v.color ?? null, size: v.size ?? null, stock: v.stock ?? null })),
+    }));
+  },
+);
+
+export interface ManualOrderInput {
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  notes?: string;
+  shipping_cost?: number;
+  deduct_stock: boolean;
+  items: { product_id: string; color: string | null; size: string | null; quantity: number }[];
+}
+
+export const createMerchantOrder = createServerFn({ method: "POST" })
+  .inputValidator((v: ManualOrderInput) => {
+    if (!v.customer_name?.trim()) throw new Error("اكتب اسم العميل.");
+    if (!v.customer_phone?.trim()) throw new Error("اكتب رقم الهاتف.");
+    if (!Array.isArray(v.items) || v.items.length === 0) throw new Error("أضف منتجاً واحداً على الأقل.");
+    return v;
+  })
+  .handler(async ({ data }): Promise<
+    | { ok: true; order_number: string }
+    | { ok: false; error: "insufficient_stock"; shortages: OrderItem[] }
+  > => {
+    const { requirePermission } = await import("@/lib/session-guard.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { newOrderNumber } = await import("@/lib/storefront-order.server");
+    const { userId } = await requirePermission("orders");
+    const merchantId = await getMerchantId(userId);
+    if (!merchantId) throw new Error("لا يوجد متجر مرتبط بحسابك.");
+    const admin = getSupabaseAdmin();
+
+    // Prices always come from the catalogue, never from the browser.
+    const ids = [...new Set(data.items.map((i) => i.product_id))];
+    const { data: prods } = await admin
+      .from("products").select("id, name, price, currency").eq("user_id", userId).in("id", ids);
+    const byId = new Map((prods ?? []).map((p: any) => [p.id, p]));
+    const items = data.items.map((it) => {
+      const p: any = byId.get(it.product_id);
+      if (!p) throw new Error("منتج غير موجود.");
+      const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
+      const unit = Number(p.price ?? 0);
+      return {
+        productId: p.id, product_id: p.id, product_name: p.name, name: p.name,
+        price: unit, unit_price: unit, line_total: Math.round(unit * qty * 100) / 100,
+        currency: p.currency ?? null, quantity: qty,
+        color: it.color ?? null, size: it.size ?? null,
+      };
+    });
+    const subtotal = Math.round(items.reduce((n, i) => n + i.line_total, 0) * 100) / 100;
+    const shipping = Math.max(0, Number(data.shipping_cost) || 0);
+    const total = Math.round((subtotal + shipping) * 100) / 100;
+
+    let orderNumber = newOrderNumber();
+    for (let attempt = 1; ; attempt++) {
+      const { data: res, error } = await admin.rpc("create_order_with_stock", {
+        p_order_number: orderNumber,
+        p_customer_name: data.customer_name.trim().slice(0, 200),
+        p_customer_phone: data.customer_phone.trim().slice(0, 50),
+        p_customer_address: (data.customer_address ?? "").trim().slice(0, 500),
+        p_items: items,
+        p_notes: (data.notes ?? "").trim().slice(0, 2000) || null,
+        p_conversation_id: null,
+        p_merchant_id: merchantId,
+        p_customer_id: null,
+        p_payment_method: null,
+        p_deduct_stock: data.deduct_stock,
+        p_payment_status: "confirmed",
+      });
+      if (!error) {
+        const r = (res ?? {}) as any;
+        if (r.ok === false && r.error === "insufficient_stock") {
+          return { ok: false, error: "insufficient_stock", shortages: Array.isArray(r.shortages) ? r.shortages : [] };
+        }
+        break;
+      }
+      const msg = String((error as any)?.message ?? "");
+      if ((error as any)?.code === "23505" && /order_number/i.test(msg) && attempt < 25) {
+        orderNumber = newOrderNumber();
+        continue;
+      }
+      throw new Error(msg || "تعذّر إنشاء الطلب.");
+    }
+    await admin.from("orders")
+      .update({ total_price: total, subtotal_price: subtotal, discount_amount: 0, shipping_cost: shipping })
+      .eq("order_number", orderNumber).eq("merchant_id", merchantId);
+    return { ok: true, order_number: orderNumber };
+  });
+
+// ---------- EDIT ORDER DETAILS -------------------------------------------
+export interface OrderDetailsPatch {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  notes: string;
+  shipping_cost: number;
+  total_price: number;
+}
+
+/**
+ * Edits the customer/delivery details and amounts of an order. Products and
+ * quantities are not edited here so stock already deducted stays consistent.
+ */
+export const updateOrderDetails = createServerFn({ method: "POST" })
+  .inputValidator((v: OrderDetailsPatch) => {
+    if (!v.id) throw new Error("طلب غير صحيح.");
+    if (!v.customer_name?.trim()) throw new Error("اكتب اسم العميل.");
+    return v;
+  })
+  .handler(async ({ data }) => {
+    const { requirePermission } = await import("@/lib/session-guard.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { userId } = await requirePermission("orders");
+    const merchantId = await getMerchantId(userId);
+    if (!merchantId) throw new Error("لا يوجد متجر مرتبط بحسابك.");
+    const admin = getSupabaseAdmin();
+    const { data: row, error } = await admin.from("orders")
+      .update({
+        customer_name: data.customer_name.trim().slice(0, 200),
+        customer_phone: (data.customer_phone ?? "").trim().slice(0, 50),
+        customer_address: (data.customer_address ?? "").trim().slice(0, 500),
+        notes: (data.notes ?? "").slice(0, 2000) || null,
+        shipping_cost: Math.max(0, Number(data.shipping_cost) || 0),
+        total_price: Math.max(0, Number(data.total_price) || 0),
+      })
+      .eq("id", data.id).eq("merchant_id", merchantId)
+      .select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("الطلب غير موجود.");
+    return { ok: true };
+  });
