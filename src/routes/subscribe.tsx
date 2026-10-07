@@ -63,11 +63,38 @@ function SubscribePage() {
               التأكيد خلال 15 دقيقة.
             </p>
 
+            <div className="space-y-1.5 text-right">
+              <label htmlFor="pay-phone" className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                <Phone className="h-3.5 w-3.5 text-primary" />
+                رقم موبايلك للتواصل لتأكيد الدفع
+              </label>
+              <input
+                id="pay-phone"
+                type="tel"
+                inputMode="numeric"
+                dir="ltr"
+                maxLength={11}
+                placeholder="01xxxxxxxxx"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                className="w-full rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-bold outline-none focus:border-primary"
+              />
+              {phone.length > 0 && !phoneValid && (
+                <p className="text-xs font-semibold text-dashboard-amber">أدخل 11 رقمًا يبدأ بـ 01.</p>
+              )}
+            </div>
+
             <a
               href={INSTAPAY_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90"
+              onClick={onPayClick}
+              aria-disabled={!phoneValid}
+              className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold transition-opacity ${
+                phoneValid
+                  ? "bg-primary text-primary-foreground hover:opacity-90"
+                  : "cursor-not-allowed bg-muted text-muted-foreground"
+              }`}
             >
               <ExternalLink className="h-4 w-4" />
               ادفع الآن عبر انستا باي
