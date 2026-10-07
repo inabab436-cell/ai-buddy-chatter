@@ -9,6 +9,8 @@ import { createServerFn } from "@tanstack/react-start";
 export interface ActivationStatus {
   subscribed: boolean;
   requestedAt: string | null;
+  startedAt: string | null;
+  endsAt: string | null;
 }
 
 async function currentUserId(): Promise<string> {
@@ -31,6 +33,8 @@ export const getActivationStatus = createServerFn({ method: "GET" }).handler(
     return {
       subscribed: meta.subscribed === true,
       requestedAt: typeof meta.activation_requested_at === "string" ? meta.activation_requested_at : null,
+      startedAt: typeof meta.subscription_started_at === "string" ? meta.subscription_started_at : null,
+      endsAt: typeof meta.subscription_ends_at === "string" ? meta.subscription_ends_at : null,
     };
   },
 );
