@@ -22,9 +22,23 @@ export const Route = createFileRoute("/subscribe")({
 });
 
 function SubscribePage() {
+  const [phone, setPhone] = useState(() => {
+    try { return localStorage.getItem("cupai_pay_phone") ?? ""; } catch { return ""; }
+  });
+  const phoneValid = /^01[0-9]{9}$/.test(phone.trim());
+
   const copyLink = () => {
     void navigator.clipboard?.writeText(INSTAPAY_URL);
     toast.success("تم نسخ رابط الدفع");
+  };
+
+  const onPayClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!phoneValid) {
+      e.preventDefault();
+      toast.error("أدخل رقم موبايل صحيح أولاً (11 رقمًا يبدأ بـ 01)");
+      return;
+    }
+    try { localStorage.setItem("cupai_pay_phone", phone.trim()); } catch { /* ignore */ }
   };
 
   return (
