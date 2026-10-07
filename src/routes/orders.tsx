@@ -289,10 +289,10 @@ function OrdersPage() {
   });
 
   const cancelMut = useMutation({
-    mutationFn: (v: { id: string }) => cancelOrder({ data: v }),
-    onSuccess: () => {
+    mutationFn: (v: { id: string; deducted: boolean }) => cancelOrder({ data: { id: v.id } }),
+    onSuccess: (_r, v) => {
       qc.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("تم إلغاء الطلب وإرجاع الكميات للمخزون.");
+      toast.success(v.deducted ? "تم إلغاء الطلب وإرجاع الكميات للمخزون." : "تم إلغاء الطلب. لم يُخصم من المخزون أصلاً.");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "فشل الإلغاء."),
   });
@@ -490,7 +490,7 @@ function OrdersPage() {
                   onToggle={() => setExpanded((s) => ({ ...s, [o.id]: !s[o.id] }))}
                   onPay={() => payMut.mutate({ id: o.id })}
                   onStatus={(s) => guardedStatus(o, s)}
-                  onCancel={() => cancelMut.mutate({ id: o.id })}
+                  onCancel={() => cancelMut.mutate({ id: o.id, deducted: Array.isArray((o as any).stock_deducted) && (o as any).stock_deducted.length > 0 })}
                   onEdit={() => setEditing(o)}
                   busy={{ pay: payMut.isPending, status: statusMut.isPending, cancel: cancelMut.isPending }}
                 />

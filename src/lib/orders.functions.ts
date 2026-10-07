@@ -547,3 +547,79 @@ export const updateOrderDetails = createServerFn({ method: "POST" })
     if (!row) throw new Error("الطلب غير موجود.");
     return { ok: true };
   });
+
+// ---------- EDIT ORDER ITEMS (stock follows the edit) --------------------
+export interface OrderItemsPatch {
+  id: string;
+  items: { product_id: string; color: string | null; size: string | null; quantity: number }[];
+}
+
+/**
+ * Replaces an order's products/quantities. Prices come from the catalogue.
+ * If the order had deducted stock, the database returns the old quantities
+ * and deducts the new ones in one transaction; otherwise stock is untouched.
+ */
+export const editOrderItems = createServerFn({ method: "POST" })
+  .inputValidator((v: OrderItemsPatch) => {
+    if (!v.id) throw new Error("طلب غير صحيح.");
+    if (!Array.isArray(v.items) || v.items.length === 0) throw new Error("الطلب يجب أن يحتوي على منتج واحد على الأقل.");
+    return v;
+  })
+  .handler(async ({ data }): Promise<
+    | { ok: true; stock_updated: boolean }
+    | { ok: false; error: "insufficient_stock"; shortages: OrderItem[] }
+  > => {
+    const { requirePermission } = await import("@/lib/session-guard.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { userId } = await requirePermission("orders");
+    const merchantId = await getMerchantId(userId);
+    if (!merchantId) throw new Error("لا يوجد متجر مرتبط بحسابك.");
+    const admin = getSupabaseAdmin();
+
+    const { data: ord } = await admin.from("orders")
+      .select("discount_amount, shipping_cost").eq("id", data.id).eq("merchant_id", merchantId).maybeSingle();
+    if (!ord) throw new Error("الطلب غير موجود.");
+
+    const ids = [...new Set(data.items.map((i) => i.product_id))];
+    const { data: prods } = await admin
+      .from("products").select("id, name, price, currency").eq("user_id", userId).in("id", ids);
+    const byId = new Map((prods ?? []).map((p: any) => [p.id, p]));
+    const items = data.items.map((it) => {
+      const p: any = byId.get(it.product_id);
+      if (!p) throw new Error("منتج غير موجود.");
+      const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
+      const unit = Number(p.price ?? 0);
+      return {
+        productId: p.id, product_id: p.id, product_name: p.name, name: p.name,
+        price: unit, unit_price: unit, line_total: Math.round(unit * qty * 100) / 100,
+        currency: p.currency ?? null, quantity: qty,
+        color: it.color ?? null, size: it.size ?? null,
+      };
+    });
+    const subtotal = Math.round(items.reduce((n, i) => n + i.line_total, 0) * 100) / 100;
+    const discount = Number((ord as any).discount_amount ?? 0) || 0;
+    const shipping = Number((ord as any).shipping_cost ?? 0) || 0;
+    const total = Math.max(0, Math.round((subtotal - discount + shipping) * 100) / 100);
+
+    const { data: res, error } = await admin.rpc("edit_order_items", {
+      p_order_id: data.id,
+      p_merchant_id: merchantId,
+      p_items: items,
+      p_subtotal: subtotal,
+      p_total: total,
+    });
+    if (error) {
+      if (/edit_order_items/i.test(error.message)) {
+        throw new Error("ميزة تعديل المنتجات تحتاج تحديث قاعدة البيانات أولاً.");
+      }
+      throw new Error(error.message);
+    }
+    const r = (res ?? {}) as any;
+    if (r.ok === false) {
+      if (r.error === "insufficient_stock") {
+        return { ok: false, error: "insufficient_stock", shortages: Array.isArray(r.shortages) ? r.shortages : [] };
+      }
+      throw new Error(r.error === "cancelled" ? "لا يمكن تعديل طلب ملغي." : "الطلب غير موجود.");
+    }
+    return { ok: true, stock_updated: Boolean(r.stock_updated) };
+  });
