@@ -112,7 +112,6 @@ function Console({ onOut }: { onOut: () => void }) {
                   الاشتراك: من {fmt(m.subscriptionStartedAt)} إلى {fmt(m.subscriptionEndsAt)}
                 </p>
               )}
-              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => act(async () => { await imp({ data: { id: m.id } }); window.open("/dashboard", "_blank"); })}>
                   <LogIn className="ms-1 h-4 w-4" />دخول لحسابه
