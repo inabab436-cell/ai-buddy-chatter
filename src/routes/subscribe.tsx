@@ -125,6 +125,10 @@ function SubscribePage() {
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" /></span>
               <span className="text-sm font-semibold">ادفع فقط عبر الرابط الرسمي في هذه الصفحة.</span>
             </div>
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-dashboard-amber-soft text-dashboard-amber"><ShieldCheck className="h-4 w-4" /></span>
+              <span className="text-sm font-semibold">مهم: لن يطلب منك Cupai أبدًا كلمة المرور أو الرقم السري الخاص بـ InstaPay.</span>
+            </div>
           </div>
         </SurfaceCard>
 
