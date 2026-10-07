@@ -45,12 +45,14 @@ export const requestActivation = createServerFn({ method: "POST" }).handler(
     const sb = await admin();
     const { data } = await sb.auth.admin.getUserById(id);
     const meta = data.user?.app_metadata ?? {};
-    if (meta.subscribed === true) return { subscribed: true, requestedAt: meta.activation_requested_at ?? null };
+    const startedAt = typeof meta.subscription_started_at === "string" ? meta.subscription_started_at : null;
+    const endsAt = typeof meta.subscription_ends_at === "string" ? meta.subscription_ends_at : null;
+    if (meta.subscribed === true) return { subscribed: true, requestedAt: meta.activation_requested_at ?? null, startedAt, endsAt };
     const requestedAt = typeof meta.activation_requested_at === "string" ? meta.activation_requested_at : new Date().toISOString();
     const { error } = await sb.auth.admin.updateUserById(id, {
       app_metadata: { ...meta, activation_requested_at: requestedAt },
     });
     if (error) throw new Error("تعذّر إرسال طلب التفعيل، حاول مرة أخرى.");
-    return { subscribed: false, requestedAt };
+    return { subscribed: false, requestedAt, startedAt: null, endsAt: null };
   },
 );
