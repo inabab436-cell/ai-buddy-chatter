@@ -29,4 +29,4 @@
 - [x] Customers chat without signing in, with a long-lived remembered session
 - [x] Shipping-company Excel export button on the orders page
 - [x] Remove customer sign-in entirely (Google panel, OTP, login UI) — guests only, per owner decision
-- [ ] Admin plan upgrade: store subscription start/end dates (monthly from activation), show to admin + merchant, warn merchant of store restriction on expiry until renewal
+- [x] Admin plan upgrade: store subscription start/end dates (monthly from activation), show to admin + merchant, warn merchant of store restriction on expiry until renewal
