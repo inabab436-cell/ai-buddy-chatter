@@ -106,6 +106,26 @@ function ProductsPage() {
   const totalStock = rows.reduce((n, p) => n + totalQty(p).qty, 0);
   const totalSold = Array.from(salesById.values()).reduce((n, s) => n + s.sold, 0);
 
+  // Low-stock alert: every colour/size with 3 pieces or fewer left.
+  const lowItems = rows.flatMap((p) =>
+    p.variants
+      .filter((v) => v.quantity != null && Number(v.quantity) <= 3)
+      .map((v) => ({
+        key: `${p.id}-${v.color}-${v.size}`,
+        label: [p.name, v.color, v.size].filter(Boolean).join(" - "),
+        qty: Number(v.quantity),
+      })),
+  );
+  const alertedRef = useRef(false);
+  useEffect(() => {
+    if (alertedRef.current || !q.data || lowItems.length === 0) return;
+    alertedRef.current = true;
+    toast.warning(`تنبيه: ${lowItems.length} من منتجاتك قاربت على النفاد`, {
+      description: lowItems.slice(0, 3).map((i) => `${i.label}: ${i.qty === 0 ? "نفدت" : `متبقي ${i.qty}`}`).join("\n"),
+      duration: 8000,
+    });
+  }, [q.data, lowItems.length]);
+
   return (
     <PageShell>
       <div className="inventory-navy -mx-4 -mt-6 min-h-[70vh] space-y-4 bg-background px-4 pb-4 pt-5">
@@ -115,6 +135,27 @@ function ProductsPage() {
             تابع كمياتك وأسعارك، واضغط على أي منتج لرؤية ألوانه ومقاساته.
           </p>
         </header>
+
+        {lowItems.length > 0 && (
+          <div role="alert" className="rounded-2xl border border-inv-warn/40 bg-inv-warn-soft p-3">
+            <div className="text-sm font-bold text-inv-warn">
+              ⚠️ تنبيه: {lowItems.length} {lowItems.length === 1 ? "منتج قارب" : "منتجات قاربت"} على النفاد
+            </div>
+            <ul className="mt-1.5 space-y-0.5 text-[12px]">
+              {lowItems.slice(0, 6).map((i) => (
+                <li key={i.key} className="flex justify-between gap-2">
+                  <span className="truncate">{i.label}</span>
+                  <span className="inv-num shrink-0 font-semibold text-inv-warn">
+                    {i.qty === 0 ? "نفدت" : `متبقي ${i.qty}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {lowItems.length > 6 && (
+              <div className="mt-1 text-[11px] text-muted-foreground">و{lowItems.length - 6} أخرى…</div>
+            )}
+          </div>
+        )}
 
         <Button
           onClick={() => setAddOpen(true)}
