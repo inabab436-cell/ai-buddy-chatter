@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, Clock, Copy, Crown, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, Copy, Crown, ExternalLink, Phone, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageShell, PageHero, SurfaceCard } from "@/components/layout/page-shell";
