@@ -119,7 +119,12 @@ function AccountPage() {
           <SectionHeader icon={<ShieldCheck className="h-3.5 w-3.5" />} title="بيانات الحساب" />
           <div className="divide-y divide-border">
             <Row icon={<Mail className="h-4 w-4" />} label="البريد الإلكتروني" value={email ?? "—"} mono />
-            <Row icon={<Crown className="h-4 w-4" />} label="الباقة" value="ابدأ فورًا — 299ج" />
+            <Row icon={<Crown className="h-4 w-4" />} label="الباقة" value="ابدأ فورًا — 299ج"
+              action={subscribed ? undefined : (
+                <Link to="/subscribe" className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90">
+                  <CreditCard className="h-3.5 w-3.5" /> دفع
+                </Link>
+              )} />
           </div>
         </SurfaceCard>
 
