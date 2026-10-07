@@ -16,6 +16,8 @@ export interface AdminMerchant {
   restricted: boolean;
   subscribed: boolean;
   activationRequestedAt: string | null;
+  subscriptionStartedAt: string | null;
+  subscriptionEndsAt: string | null;
 }
 
 async function adminSessionConfig() {
@@ -107,6 +109,10 @@ export const listMerchants = createServerFn({ method: "GET" }).handler(
           subscribed: u.app_metadata?.subscribed === true,
           activationRequestedAt:
             typeof u.app_metadata?.activation_requested_at === "string" ? u.app_metadata.activation_requested_at : null,
+          subscriptionStartedAt:
+            typeof u.app_metadata?.subscription_started_at === "string" ? u.app_metadata.subscription_started_at : null,
+          subscriptionEndsAt:
+            typeof u.app_metadata?.subscription_ends_at === "string" ? u.app_metadata.subscription_ends_at : null,
         });
       }
       if (data.users.length < 200) break;
@@ -160,7 +166,19 @@ export const updateMerchant = createServerFn({ method: "POST" })
     if (data.restricted !== undefined) attrs.ban_duration = data.restricted ? "876000h" : "none";
     if (data.subscribed !== undefined) {
       const { data: cur } = await sb.auth.admin.getUserById(data.id);
-      attrs.app_metadata = { ...(cur.user?.app_metadata ?? {}), subscribed: data.subscribed };
+      const meta: Record<string, unknown> = { ...(cur.user?.app_metadata ?? {}), subscribed: data.subscribed };
+      if (data.subscribed) {
+        // Monthly subscription: the month counts from the moment of activation.
+        const start = new Date();
+        const end = new Date(start);
+        end.setMonth(end.getMonth() + 1);
+        meta.subscription_started_at = start.toISOString();
+        meta.subscription_ends_at = end.toISOString();
+      } else {
+        meta.subscription_started_at = null;
+        meta.subscription_ends_at = null;
+      }
+      attrs.app_metadata = meta;
     }
     const { error } = await sb.auth.admin.updateUserById(data.id, attrs);
     if (error) throw new Error("تعذّر التعديل: " + error.message);
